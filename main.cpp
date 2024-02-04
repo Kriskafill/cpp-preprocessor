@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+// Sprint 5: Review Version #1
+
 using namespace std;
 using filesystem::path;
 
@@ -14,13 +16,76 @@ path operator""_p(const char* data, std::size_t sz) {
     return path(data, data + sz);
 }
 
-// напишите эту функцию
 bool Preprocess(const path& in_file, const path& out_file, const vector<path>& include_directories);
+
+bool SearchFileInDirectory(const path& in_file,
+                           const path& out_file,
+                           const vector<path>& include_directories,
+                           const smatch& m,
+                           const int line) {
+
+    bool have_directory = false;
+    for (const path& directory : include_directories) {
+        path p = directory / string(m[1]);
+        auto status = filesystem::status(p);
+        if (filesystem::exists(status)) {
+            if (!Preprocess(p, out_file, include_directories)) {
+                return false;
+            }
+            have_directory = true;
+        }
+    }
+
+    if (!have_directory) {
+        cout << "unknown include file "s << string(m[1])
+            << " at file "s << in_file.string()
+            << " at line " << line
+            << endl;
+        return false;
+    }
+
+    return true;
+}
+
+bool Preprocess(const path& in_file, const path& out_file, const vector<path>& include_directories) {
+    ifstream in(in_file);
+    if (!in) return false;
+    ofstream out(out_file, ios::app);
+
+    static regex reg_1(R"/(\s*#\s*include\s*"([^"]*)"\s*)/");
+    static regex reg_2(R"/(\s*#\s*include\s*<([^>]*)>\s*)/");
+    smatch m;
+
+    int line = 0;
+    string buff;
+
+    while (in.is_open() && getline(in, buff)) {
+        ++line;
+        if (regex_match(buff, m, reg_1)) {
+            path p = in_file.parent_path() / string(m[1]);
+            auto status = filesystem::status(p);
+            if (filesystem::exists(status)) {
+                if (!Preprocess(p, out_file, include_directories)) {
+                    return false;
+                }
+            }
+            else {
+                if (!SearchFileInDirectory(in_file, out_file, include_directories, m, line)) return false;
+            }
+        }
+        else if (regex_match(buff, m, reg_2)) {
+            if (!SearchFileInDirectory(in_file, out_file, include_directories, m, line)) return false;
+        }
+        else {
+            out << buff << endl;
+        }
+    }
+
+    return true;
+}
 
 string GetFileContents(string file) {
     ifstream stream(file);
-
-    // конструируем string по двум итераторам
     return {(istreambuf_iterator<char>(stream)), istreambuf_iterator<char>()};
 }
 
