@@ -7,8 +7,6 @@
 #include <string>
 #include <vector>
 
-// Sprint 5: Final Version
-
 using namespace std;
 using filesystem::path;
 
